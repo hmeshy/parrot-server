@@ -1,0 +1,484 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pirate Parrot Voice Booth</title>
+  <style>
+    :root {
+      --bg-1: #f9efe0;
+      --bg-2: #f6d27a;
+      --ink: #1a1d24;
+      --accent: #007f5f;
+      --accent-2: #b21e35;
+      --card: #fff9ee;
+      --shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 15%, rgba(255, 255, 255, 0.56), transparent 35%),
+        linear-gradient(120deg, var(--bg-1), var(--bg-2));
+      display: grid;
+      place-items: center;
+      padding: 1rem;
+    }
+
+    .card {
+      width: min(820px, 100%);
+      background: var(--card);
+      border: 3px solid #3a2f1f;
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 1rem 1rem 1.25rem;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.4rem, 3.4vw, 2rem);
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 0.45rem;
+      margin-bottom: 1rem;
+      opacity: 0.82;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 0.9rem;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 0.62rem 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 120ms ease, opacity 120ms ease;
+      background: var(--accent-2);
+      color: white;
+    }
+
+    button:not(:disabled):hover { transform: translateY(-1px); }
+
+    .status {
+      min-height: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.8rem;
+    }
+
+    .panel {
+      border: 2px dashed #916d3f;
+      border-radius: 12px;
+      padding: 0.7rem;
+      margin-top: 0.7rem;
+      background: rgba(255, 255, 255, 0.5);
+    }
+
+    .label {
+      font-size: 0.9rem;
+      margin: 0 0 0.2rem;
+      font-weight: 700;
+      opacity: 0.9;
+    }
+
+    .text {
+      margin: 0;
+      white-space: pre-wrap;
+      line-height: 1.42;
+    }
+
+    audio {
+      width: 100%;
+      margin-top: 0.6rem;
+    }
+
+    .meta {
+      margin-top: 0.7rem;
+      font-size: 0.82rem;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Pirate Parrot Voice Booth</h1>
+    <p class="sub">One tap starts hands-free mode: it listens, detects when you stop speaking, responds, plays chirps/clicks, and listens again.</p>
+
+    <section class="controls">
+      <button id="modeBtn">Start Parrot Mode</button>
+      <label style="display:flex;align-items:center;gap:0.35rem;font-weight:700;">
+        <input id="sfxToggle" type="checkbox" checked />
+        Play cue sounds
+      </label>
+    </section>
+
+    <p id="status" class="status">Idle</p>
+
+    <section class="panel">
+      <p class="label">Whisper Transcription</p>
+      <p id="transcription" class="text">(none yet)</p>
+    </section>
+
+    <section class="panel">
+      <p class="label">Pirate Parrot Line</p>
+      <p id="parrotText" class="text">(none yet)</p>
+      <audio id="audioPlayer" controls></audio>
+    </section>
+
+    <p class="meta">Cue effects use online recorded parrot chirp and click clips.</p>
+  </main>
+
+  <script>
+    const modeBtn = document.getElementById("modeBtn");
+    const statusEl = document.getElementById("status");
+    const transcriptionEl = document.getElementById("transcription");
+    const parrotTextEl = document.getElementById("parrotText");
+    const audioPlayer = document.getElementById("audioPlayer");
+    const sfxToggleEl = document.getElementById("sfxToggle");
+
+    const VOICE_THRESHOLD = 0.026;
+    const END_SILENCE_MS = 850;
+    const MAX_RECORD_MS = 9000;
+    const MIN_SPEECH_MS = 300;
+    const PARROT_PLAYBACK_RATE = 1.0;
+    const DEFAULT_CHIRP_URL = "https://commons.wikimedia.org/wiki/Special:FilePath/Budgerigar_chirping.ogg";
+    const DEFAULT_CLICK_URL = "https://commons.wikimedia.org/wiki/Special:FilePath/Australian_Ringneck_Parrot.ogg";
+
+    let autoMode = false;
+    let stream = null;
+    let audioContext = null;
+    let analyser = null;
+    let monitorTimer = null;
+    let mediaRecorder = null;
+    let mimeType = "audio/webm";
+    let chunks = [];
+    let recordingStartedAt = 0;
+    let speechStartedAt = 0;
+    let lastVoiceAt = 0;
+    let speechDetected = false;
+    let waitingForServer = false;
+    let squawkSfxEnabled = true;
+    let chirpUrl = DEFAULT_CHIRP_URL;
+    let clickUrl = DEFAULT_CLICK_URL;
+
+    modeBtn.addEventListener("click", async () => {
+      if (!autoMode) {
+        await startParrotMode();
+      } else {
+        stopParrotMode();
+      }
+    });
+
+    async function startParrotMode() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        source.connect(analyser);
+
+        mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+        autoMode = true;
+        modeBtn.textContent = "Stop Parrot Mode";
+        statusEl.textContent = "Parrot mode active. Speak when ready...";
+        await loadConfig();
+        beginListeningTurn();
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Microphone access failed.";
+      }
+    }
+
+    function stopParrotMode() {
+      autoMode = false;
+      waitingForServer = false;
+      modeBtn.textContent = "Start Parrot Mode";
+      statusEl.textContent = "Parrot mode stopped.";
+
+      if (monitorTimer) {
+        clearInterval(monitorTimer);
+        monitorTimer = null;
+      }
+
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop());
+        stream = null;
+      }
+
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+    }
+
+    function beginListeningTurn() {
+      if (!autoMode || waitingForServer || !stream) {
+        return;
+      }
+
+      chunks = [];
+      speechDetected = false;
+      speechStartedAt = 0;
+      lastVoiceAt = 0;
+      recordingStartedAt = Date.now();
+
+      mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        if (!autoMode) {
+          return;
+        }
+
+        if (!speechDetected) {
+          statusEl.textContent = "No voice detected. Listening again...";
+          setTimeout(beginListeningTurn, 300);
+          return;
+        }
+
+        const blob = new Blob(chunks, { type: mimeType });
+        await sendToParrot(blob);
+      };
+
+      mediaRecorder.start(200);
+      statusEl.textContent = "Listening...";
+      startVoiceMonitor();
+    }
+
+    function startVoiceMonitor() {
+      if (monitorTimer) {
+        clearInterval(monitorTimer);
+      }
+
+      const timeData = new Uint8Array(analyser.fftSize);
+
+      monitorTimer = setInterval(() => {
+        if (!mediaRecorder || mediaRecorder.state !== "recording") {
+          return;
+        }
+
+        analyser.getByteTimeDomainData(timeData);
+        let sum = 0;
+        for (let i = 0; i < timeData.length; i += 1) {
+          const normalized = (timeData[i] - 128) / 128;
+          sum += normalized * normalized;
+        }
+
+        const rms = Math.sqrt(sum / timeData.length);
+        const now = Date.now();
+
+        if (rms > VOICE_THRESHOLD) {
+          lastVoiceAt = now;
+          if (!speechDetected) {
+            speechDetected = true;
+            speechStartedAt = now;
+            statusEl.textContent = "Heard ye. Keep talkin'...";
+          }
+        }
+
+        const speechLongEnough = speechDetected && (now - speechStartedAt) >= MIN_SPEECH_MS;
+        const silenceLongEnough = speechLongEnough && lastVoiceAt && (now - lastVoiceAt) >= END_SILENCE_MS;
+        const tooLong = (now - recordingStartedAt) >= MAX_RECORD_MS;
+
+        if (silenceLongEnough || tooLong) {
+          stopCurrentRecording();
+        }
+      }, 100);
+    }
+
+    function stopCurrentRecording() {
+      if (monitorTimer) {
+        clearInterval(monitorTimer);
+        monitorTimer = null;
+      }
+
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+    }
+
+    async function sendToParrot(audioBlob) {
+      if (!autoMode) {
+        return;
+      }
+
+      waitingForServer = true;
+      statusEl.textContent = "Parrot is thinkin'...";
+
+      try {
+        const formData = new FormData();
+        formData.append("audio", audioBlob, "turn.webm");
+
+        const response = await fetch("/api/parrot", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          const messageParts = [];
+          if (data.error) messageParts.push(data.error);
+          if (data.stage) messageParts.push(`stage=${data.stage}`);
+          if (data.details) messageParts.push(data.details);
+          throw new Error(messageParts.join(" | ") || "Unknown error");
+        }
+
+        transcriptionEl.textContent = data.transcription || "(empty)";
+        parrotTextEl.textContent = data.parrotText || "(empty)";
+
+        const sequence = Array.isArray(data.audioSequence) && data.audioSequence.length
+          ? data.audioSequence
+          : (Array.isArray(data.audioSegments) ? data.audioSegments.map((url) => ({ type: "tts", url })) : [{ type: "tts", url: data.audioUrl }]);
+        await playParrotReply(sequence);
+
+        if (autoMode) {
+          statusEl.textContent = "Speak again...";
+          setTimeout(beginListeningTurn, 250);
+        }
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = `Error: ${err.message}`;
+        if (autoMode) {
+          setTimeout(beginListeningTurn, 1000);
+        }
+      } finally {
+        waitingForServer = false;
+      }
+    }
+
+    async function playParrotReply(audioSequence) {
+      const sequence = audioSequence.filter((item) => item && item.url);
+      if (!sequence.length) {
+        return;
+      }
+
+      for (const item of sequence) {
+        if (item.type === "sfx") {
+          if (squawkSfxEnabled) {
+            statusEl.textContent = `Parrot ${String(item.effect || "cue").toLowerCase()}...`;
+            await playClip(item.url, 1.0, 0.9);
+          }
+          continue;
+        }
+
+        audioPlayer.src = item.url;
+        audioPlayer.playbackRate = PARROT_PLAYBACK_RATE;
+        statusEl.textContent = "Parrot replying...";
+        await ensureAudioMetadata(audioPlayer);
+        await playAudioElement(audioPlayer);
+      }
+    }
+
+    async function playAudioElement(el) {
+      await el.play();
+      await new Promise((resolve, reject) => {
+        const onEnded = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = () => {
+          cleanup();
+          reject(new Error("Audio playback failed."));
+        };
+        const cleanup = () => {
+          el.removeEventListener("ended", onEnded);
+          el.removeEventListener("error", onError);
+        };
+
+        el.addEventListener("ended", onEnded);
+        el.addEventListener("error", onError);
+      });
+    }
+
+    async function loadConfig() {
+      try {
+        const response = await fetch("/api/config");
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        if (typeof data.enableSquawkSfx === "boolean") {
+          squawkSfxEnabled = data.enableSquawkSfx;
+          sfxToggleEl.checked = data.enableSquawkSfx;
+        }
+        if (typeof data.chirpUrl === "string" && data.chirpUrl.trim()) {
+          chirpUrl = data.chirpUrl.trim();
+        }
+        if (typeof data.clickUrl === "string" && data.clickUrl.trim()) {
+          clickUrl = data.clickUrl.trim();
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    sfxToggleEl.addEventListener("change", () => {
+      squawkSfxEnabled = sfxToggleEl.checked;
+    });
+
+    async function playClip(url, rate, volume) {
+      const a = new Audio(url);
+      a.preload = "auto";
+      a.playbackRate = rate;
+      a.volume = volume;
+      try {
+        await playAudioElement(a);
+      } catch (error) {
+        console.error(error);
+        throw error;
+      }
+    }
+
+    async function ensureAudioMetadata(el) {
+      if (Number.isFinite(el.duration) && el.duration > 0) {
+        return;
+      }
+      await new Promise((resolve) => {
+        const onReady = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = () => {
+          cleanup();
+          resolve();
+        };
+        const cleanup = () => {
+          el.removeEventListener("loadedmetadata", onReady);
+          el.removeEventListener("error", onError);
+        };
+        el.addEventListener("loadedmetadata", onReady, { once: true });
+        el.addEventListener("error", onError, { once: true });
+      });
+    }
+
+  </script>
+</body>
+</html>
