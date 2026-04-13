@@ -116,7 +116,8 @@
     <p class="sub">One tap starts hands-free mode: it listens, detects when you stop speaking, responds, plays chirps/clicks, and listens again.</p>
 
     <section class="controls">
-      <button id="modeBtn">Start Parrot Mode</button>
+      <button id="showBtn">Start Show Intro</button>
+      <button id="modeBtn" disabled>Start Interactive Parrot</button>
       <label style="display:flex;align-items:center;gap:0.35rem;font-weight:700;">
         <input id="sfxToggle" type="checkbox" checked />
         Play cue sounds
@@ -140,6 +141,7 @@
   </main>
 
   <script>
+    const showBtn = document.getElementById("showBtn");
     const modeBtn = document.getElementById("modeBtn");
     const statusEl = document.getElementById("status");
     const transcriptionEl = document.getElementById("transcription");
@@ -171,6 +173,12 @@
     let squawkSfxEnabled = true;
     let chirpUrl = DEFAULT_CHIRP_URL;
     let clickUrl = DEFAULT_CLICK_URL;
+    let showState = "idle";
+    let showBusy = false;
+
+    showBtn.addEventListener("click", async () => {
+      await handleShowButton();
+    });
 
     modeBtn.addEventListener("click", async () => {
       if (!autoMode) {
@@ -181,6 +189,10 @@
     });
 
     async function startParrotMode() {
+      if (showState !== "ready") {
+        statusEl.textContent = "Play the show intro first.";
+        return;
+      }
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           audio: {
@@ -198,7 +210,8 @@
 
         mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
         autoMode = true;
-        modeBtn.textContent = "Stop Parrot Mode";
+        showState = "interactive";
+        modeBtn.textContent = "Stop Interactive Parrot";
         statusEl.textContent = "Parrot mode active. Speak when ready...";
         await loadConfig();
         beginListeningTurn();
@@ -211,8 +224,11 @@
     function stopParrotMode() {
       autoMode = false;
       waitingForServer = false;
-      modeBtn.textContent = "Start Parrot Mode";
+      modeBtn.textContent = "Start Interactive Parrot";
       statusEl.textContent = "Parrot mode stopped.";
+      if (showState === "interactive") {
+        showState = "ready";
+      }
 
       if (monitorTimer) {
         clearInterval(monitorTimer);
@@ -350,6 +366,9 @@
           if (data.details) messageParts.push(data.details);
           throw new Error(messageParts.join(" | ") || "Unknown error");
         }
+        if (!autoMode || showState === "outro_playing") {
+          return;
+        }
 
         transcriptionEl.textContent = data.transcription || "(empty)";
         parrotTextEl.textContent = data.parrotText || "(empty)";
@@ -443,6 +462,105 @@
     sfxToggleEl.addEventListener("change", () => {
       squawkSfxEnabled = sfxToggleEl.checked;
     });
+
+    async function handleShowButton() {
+      if (showBusy) {
+        return;
+      }
+
+      if (showState === "idle") {
+        await playShowIntro();
+        return;
+      }
+
+      if (showState === "ready" || showState === "interactive") {
+        await playShowOutroAndReset();
+      }
+    }
+
+    async function playShowIntro() {
+      showBusy = true;
+      showState = "intro_playing";
+      showBtn.disabled = true;
+      modeBtn.disabled = true;
+      statusEl.textContent = "Playing show intro...";
+
+      try {
+        const data = await requestShowScript("intro");
+        parrotTextEl.textContent = data.text || "(intro script unavailable)";
+        await playScriptTrack(data.audioUrl);
+        showState = "ready";
+        showBtn.textContent = "End Show (Play Outro)";
+        modeBtn.disabled = false;
+        statusEl.textContent = "Intro finished. Start interactive parrot when ready.";
+      } catch (error) {
+        console.error(error);
+        showState = "idle";
+        showBtn.textContent = "Start Show Intro";
+        modeBtn.disabled = true;
+        statusEl.textContent = `Error: ${error.message}`;
+      } finally {
+        showBusy = false;
+        showBtn.disabled = false;
+      }
+    }
+
+    async function playShowOutroAndReset() {
+      showBusy = true;
+      showState = "outro_playing";
+      showBtn.disabled = true;
+      modeBtn.disabled = true;
+      statusEl.textContent = "Playing show outro...";
+
+      try {
+        if (autoMode) {
+          stopParrotMode();
+        }
+        statusEl.textContent = "Playing show outro...";
+        const data = await requestShowScript("outro");
+        parrotTextEl.textContent = data.text || "(outro script unavailable)";
+        await playScriptTrack(data.audioUrl);
+      } catch (error) {
+        console.error(error);
+        statusEl.textContent = `Error: ${error.message}`;
+      } finally {
+        showState = "idle";
+        showBusy = false;
+        showBtn.disabled = false;
+        showBtn.textContent = "Start Show Intro";
+        modeBtn.disabled = true;
+        modeBtn.textContent = "Start Interactive Parrot";
+        statusEl.textContent = "Show reset. Press Start Show Intro to begin again.";
+      }
+    }
+
+    async function requestShowScript(type) {
+      const response = await fetch("/api/show-script", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ type }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        const parts = [];
+        if (data.error) parts.push(data.error);
+        if (data.details) parts.push(data.details);
+        throw new Error(parts.join(" | ") || "Show script request failed.");
+      }
+      return data;
+    }
+
+    async function playScriptTrack(url) {
+      if (!url) {
+        throw new Error("Missing script audio URL.");
+      }
+      audioPlayer.src = url;
+      audioPlayer.playbackRate = 1.0;
+      await ensureAudioMetadata(audioPlayer);
+      await playAudioElement(audioPlayer);
+    }
 
     async function playClip(url, rate, volume) {
       const a = new Audio(url);

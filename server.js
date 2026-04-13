@@ -57,6 +57,12 @@ const SFX_URLS = {
 const ENABLE_SQUAWK_SFX = parseBooleanEnv(process.env.ENABLE_SQUAWK_SFX, true);
 const PORT = Number(process.env.PORT || 3000);
 const MAX_TRANSCRIPT_CHARS = 600;
+const INTRO_SCRIPT =
+  "Ahoy, pirates! I'm Squawk Sparrow... yes, I know, I'm a parrot now. Long story involving a cursed coin and a very cranky sea witch. Stick around and help me find the Coral Crown to break this curse! Please move all the way down the dock to make room for your fellow crew members. Keep your treasure maps, hats, and loose belongings secure, and get ready for swashbuckling sword fights, daring pirate stunts, and a hunt for the legendary Coral Crown. The show will begin soon... so keep those eyes on the harbor, and prepare to set sail!";
+const OUTRO_SCRIPT =
+  "Thank you, pirates, for helping Squawk Sparrow break the curse and uncover the legendary Coral Crown! As you make your way back through Pirate Land, please watch your step and keep the adventure going. And remember... the greatest treasure isn't gold or jewels, it's the crew you share the journey with. Fair winds and following seas!";
+const SHOW_TTS_INSTRUCTIONS =
+  "Perform as Squawk Sparrow, a theatrical pirate-parrot show host at an amusement park. Speak clearly and confidently with playful pirate energy, strong projection, and family-friendly showmanship.";
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
@@ -72,6 +78,41 @@ app.get("/api/config", (_req, res) => {
     chirpUrl: CHIRP_URL,
     clickUrl: CLICK_URL,
   });
+});
+
+app.post("/api/show-script", async (req, res) => {
+  const requestedType = String(req.body?.type || "").toLowerCase();
+  const scriptType = requestedType === "outro" ? "outro" : "intro";
+
+  if (!process.env.NAVIGATOR_TOOLKIT_API_KEY) {
+    return res.status(500).json({ error: "Missing NAVIGATOR_TOOLKIT_API_KEY." });
+  }
+  if (!ALLOWED_KOKORO_MODELS.has(KOKORO_MODEL)) {
+    return res.status(400).json({
+      error: "Unsupported KOKORO_MODEL.",
+      details: `Allowed: ${Array.from(ALLOWED_KOKORO_MODELS).join(", ")}`,
+    });
+  }
+
+  try {
+    const text = scriptType === "outro" ? OUTRO_SCRIPT : INTRO_SCRIPT;
+    const audioUrl = await synthesizeKokoroText({
+      inputText: text,
+      filePrefix: `show-${scriptType}`,
+      instructions: SHOW_TTS_INSTRUCTIONS,
+    });
+    res.json({
+      type: scriptType,
+      text,
+      audioUrl,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Failed to synthesize show script.",
+      details: error?.message || "Unknown error",
+    });
+  }
 });
 
 app.post("/api/parrot", upload.single("audio"), async (req, res) => {
@@ -190,21 +231,15 @@ app.post("/api/parrot", upload.single("audio"), async (req, res) => {
         continue;
       }
 
-      const segmentFileName = `parrot-${baseId}-${ttsIndex}.mp3`;
-      const segmentPath = path.join(__dirname, "public", "generated", segmentFileName);
-      const segmentResponse = await openai.audio.speech.create({
-        model: KOKORO_MODEL,
-        voice: KOKORO_VOICE,
-        input: ttsText,
+      const segmentUrl = await synthesizeKokoroText({
+        inputText: ttsText,
+        filePrefix: `parrot-${baseId}-${ttsIndex}`,
         instructions: ttsInstructions,
-        speed: KOKORO_SPEED,
       });
-      const segmentBuffer = Buffer.from(await segmentResponse.arrayBuffer());
-      fs.writeFileSync(segmentPath, segmentBuffer);
       audioSequence.push({
         type: "tts",
         text: chunk.text,
-        url: `/generated/${segmentFileName}`,
+        url: segmentUrl,
       });
       ttsIndex += 1;
     }
@@ -381,4 +416,22 @@ function parseOutputChunks(text) {
   }
 
   return chunks;
+}
+
+async function synthesizeKokoroText({ inputText, filePrefix, instructions }) {
+  const safePrefix = String(filePrefix || "audio").replace(/[^a-zA-Z0-9-_]/g, "-");
+  const fileName = `${safePrefix}-${Date.now()}.mp3`;
+  const outputPath = path.join(__dirname, "public", "generated", fileName);
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+
+  const speechResponse = await openai.audio.speech.create({
+    model: KOKORO_MODEL,
+    voice: KOKORO_VOICE,
+    input: inputText,
+    instructions,
+    speed: KOKORO_SPEED,
+  });
+  const audioBuffer = Buffer.from(await speechResponse.arrayBuffer());
+  fs.writeFileSync(outputPath, audioBuffer);
+  return `/generated/${fileName}`;
 }
