@@ -1,21 +1,27 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pirate Parrot Voice Booth</title>
+  <title>Parrot Conversation Controller</title>
   <style>
     :root {
-      --bg-1: #f9efe0;
-      --bg-2: #f6d27a;
-      --ink: #1a1d24;
-      --accent: #007f5f;
-      --accent-2: #b21e35;
-      --card: #fff9ee;
-      --shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
+      --bg: #f4efe6;
+      --sand: #dcc7a1;
+      --card: rgba(255, 250, 241, 0.9);
+      --ink: #18222d;
+      --muted: #53606d;
+      --line: rgba(24, 34, 45, 0.14);
+      --accent: #0b7285;
+      --accent-2: #b04a2e;
+      --success: #2d6a4f;
+      --shadow: 0 24px 60px rgba(24, 34, 45, 0.16);
+      --radius: 24px;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       margin: 0;
@@ -23,284 +29,585 @@
       font-family: "Trebuchet MS", "Segoe UI", sans-serif;
       color: var(--ink);
       background:
-        radial-gradient(circle at 15% 15%, rgba(255, 255, 255, 0.56), transparent 35%),
-        linear-gradient(120deg, var(--bg-1), var(--bg-2));
-      display: grid;
-      place-items: center;
-      padding: 1rem;
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.68), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(176, 74, 46, 0.15), transparent 26%),
+        linear-gradient(135deg, var(--bg), var(--sand));
+      padding: 1.25rem;
     }
 
-    .card {
-      width: min(820px, 100%);
+    .shell {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      display: grid;
+      gap: 1rem;
+    }
+
+    .hero,
+    .panel {
       background: var(--card);
-      border: 3px solid #3a2f1f;
-      border-radius: 18px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.65);
+      border-radius: var(--radius);
       box-shadow: var(--shadow);
-      padding: 1rem 1rem 1.25rem;
+    }
+
+    .hero {
+      padding: 1.3rem;
+      display: grid;
+      gap: 0.9rem;
     }
 
     h1 {
       margin: 0;
-      font-size: clamp(1.4rem, 3.4vw, 2rem);
-      letter-spacing: 0.04em;
+      font-size: clamp(1.6rem, 4vw, 2.5rem);
+      letter-spacing: 0.03em;
     }
 
-    .sub {
-      margin-top: 0.45rem;
-      margin-bottom: 1rem;
-      opacity: 0.82;
+    .lede {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      max-width: 60rem;
     }
 
-    .controls {
+    .state-row {
       display: flex;
       flex-wrap: wrap;
       gap: 0.75rem;
-      margin-bottom: 0.9rem;
+      align-items: center;
+    }
+
+    .state-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.48rem 0.9rem;
+      border-radius: 999px;
+      background: rgba(11, 114, 133, 0.12);
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .status {
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    .panel {
+      padding: 1rem;
+    }
+
+    .panel.full {
+      grid-column: 1 / -1;
+    }
+
+    .panel h2 {
+      margin: 0 0 0.85rem;
+      font-size: 1.02rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .stack {
+      display: grid;
+      gap: 0.9rem;
+    }
+
+    .field {
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .field label {
+      font-weight: 700;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    input[type="text"],
+    input[type="url"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 0.85rem 0.95rem;
+      font: inherit;
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--ink);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.7rem;
     }
 
     button {
       border: 0;
       border-radius: 999px;
-      padding: 0.62rem 1rem;
-      font-weight: 700;
+      padding: 0.82rem 1.15rem;
+      font: inherit;
+      font-weight: 800;
       cursor: pointer;
-      transition: transform 120ms ease, opacity 120ms ease;
-      background: var(--accent-2);
       color: white;
+      transition: transform 120ms ease, opacity 120ms ease, filter 120ms ease;
     }
 
-    button:not(:disabled):hover { transform: translateY(-1px); }
-
-    .status {
-      min-height: 1.5rem;
-      font-weight: 700;
-      margin-bottom: 0.8rem;
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      filter: brightness(1.04);
     }
 
-    .panel {
-      border: 2px dashed #916d3f;
-      border-radius: 12px;
-      padding: 0.7rem;
-      margin-top: 0.7rem;
-      background: rgba(255, 255, 255, 0.5);
+    button:disabled {
+      opacity: 0.52;
+      cursor: not-allowed;
     }
 
-    .label {
-      font-size: 0.9rem;
-      margin: 0 0 0.2rem;
-      font-weight: 700;
-      opacity: 0.9;
+    .primary {
+      background: var(--accent);
     }
 
-    .text {
+    .secondary {
+      background: var(--accent-2);
+    }
+
+    .ghost {
+      background: var(--success);
+    }
+
+    .volume-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.7rem;
+      align-items: center;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .value-badge {
+      min-width: 4rem;
+      text-align: center;
+      padding: 0.48rem 0.65rem;
+      border-radius: 999px;
+      background: rgba(24, 34, 45, 0.08);
+      font-weight: 800;
+    }
+
+    .box,
+    pre,
+    .linkbox {
       margin: 0;
+      min-height: 8.5rem;
+      padding: 0.9rem;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.76);
       white-space: pre-wrap;
-      line-height: 1.42;
+      line-height: 1.52;
+      overflow-wrap: anywhere;
+    }
+
+    pre {
+      font-size: 0.9rem;
+      overflow-x: auto;
+    }
+
+    .linkbox a {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.45;
     }
 
     audio {
       width: 100%;
-      margin-top: 0.6rem;
     }
 
-    .meta {
-      margin-top: 0.7rem;
-      font-size: 0.82rem;
-      opacity: 0.8;
+    @media (max-width: 780px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <main class="card">
-    <h1>Pirate Parrot Voice Booth</h1>
-    <p class="sub">One tap starts hands-free mode: it listens, detects when you stop speaking, responds, plays chirps/clicks, and listens again.</p>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <h1>Parrot Conversation Controller</h1>
+        <p class="lede">
+          This page captures the phone microphone, turns speech into text, gets an AI reply, generates a 16 kHz mono PCM WAV,
+          and sends the ESP32 the exact command payload needed to play it.
+        </p>
+      </div>
 
-    <section class="controls">
-      <button id="showBtn">Start Show Intro</button>
-      <button id="modeBtn" disabled>Start Interactive Parrot</button>
-      <label style="display:flex;align-items:center;gap:0.35rem;font-weight:700;">
-        <input id="sfxToggle" type="checkbox" checked />
-        Play cue sounds
-      </label>
+      <div class="state-row">
+        <span class="state-pill">Session State: <span id="sessionState">idle</span></span>
+        <span class="status" id="status">Ready.</span>
+      </div>
     </section>
 
-    <p id="status" class="status">Idle</p>
+    <section class="grid">
+      <section class="panel">
+        <h2>Connection</h2>
+        <div class="stack">
+          <div class="field">
+            <label for="esp32Ip">ESP32 Local IP or Base URL</label>
+            <input id="esp32Ip" type="text" placeholder="192.168.1.50 or http://192.168.1.50" />
+          </div>
 
-    <section class="panel">
-      <p class="label">Whisper Transcription</p>
-      <p id="transcription" class="text">(none yet)</p>
+          <div class="actions">
+            <button id="connectBtn" class="ghost">Connect to Parrot</button>
+            <button id="startBtn" class="primary">Start Listening</button>
+            <button id="endBtn" class="secondary">End Interaction</button>
+          </div>
+
+          <p class="hint">
+            The ESP32 target is optional for local testing. If no parrot target is set, the app still generates the transcript,
+            response, and WAV URL so you can verify the backend flow.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Volume</h2>
+        <div class="stack">
+          <div class="field">
+            <label for="volume">Master Volume</label>
+            <div class="volume-row">
+              <input id="volume" type="range" min="0" max="1" step="0.01" value="0.85" />
+              <span id="volumeValue" class="value-badge">85%</span>
+            </div>
+          </div>
+
+          <p class="hint">
+            When a session is active and an ESP32 target is set, releasing the slider sends a live <code>set_volume</code> command.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Recognized User Text</h2>
+        <p id="transcript" class="box">(none yet)</p>
+      </section>
+
+      <section class="panel">
+        <h2>AI Response Text</h2>
+        <p id="responseText" class="box">(none yet)</p>
+      </section>
+
+      <section class="panel">
+        <h2>Last Audio URL</h2>
+        <div id="audioUrlBox" class="linkbox">(none yet)</div>
+      </section>
+
+      <section class="panel">
+        <h2>Local Audio Preview</h2>
+        <div class="stack">
+          <audio id="audioPlayer" controls></audio>
+          <p class="hint">
+            This preview is only for verification in the browser. The real playback target is the ESP32 command flow.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel full">
+        <h2>Last ESP32 Command JSON</h2>
+        <pre id="lastCommand">(none yet)</pre>
+      </section>
+
+      <section class="panel full">
+        <h2>Last ESP32 Response JSON</h2>
+        <pre id="lastEsp32Response">(none yet)</pre>
+      </section>
     </section>
-
-    <section class="panel">
-      <p class="label">Pirate Parrot Line</p>
-      <p id="parrotText" class="text">(none yet)</p>
-      <audio id="audioPlayer" controls></audio>
-    </section>
-
-    <p class="meta">Cue effects use online recorded parrot chirp and click clips.</p>
   </main>
 
   <script>
-    const showBtn = document.getElementById("showBtn");
-    const modeBtn = document.getElementById("modeBtn");
+    const connectBtn = document.getElementById("connectBtn");
+    const startBtn = document.getElementById("startBtn");
+    const endBtn = document.getElementById("endBtn");
     const statusEl = document.getElementById("status");
-    const transcriptionEl = document.getElementById("transcription");
-    const parrotTextEl = document.getElementById("parrotText");
+    const sessionStateEl = document.getElementById("sessionState");
+    const esp32IpEl = document.getElementById("esp32Ip");
+    const volumeEl = document.getElementById("volume");
+    const volumeValueEl = document.getElementById("volumeValue");
+    const transcriptEl = document.getElementById("transcript");
+    const responseTextEl = document.getElementById("responseText");
+    const audioUrlBoxEl = document.getElementById("audioUrlBox");
+    const lastCommandEl = document.getElementById("lastCommand");
+    const lastEsp32ResponseEl = document.getElementById("lastEsp32Response");
     const audioPlayer = document.getElementById("audioPlayer");
-    const sfxToggleEl = document.getElementById("sfxToggle");
 
     const VOICE_THRESHOLD = 0.026;
-    const END_SILENCE_MS = 850;
-    const MAX_RECORD_MS = 9000;
+    const END_SILENCE_MS = 900;
+    const MAX_RECORD_MS = 10000;
     const MIN_SPEECH_MS = 300;
-    const PARROT_PLAYBACK_RATE = 1.0;
-    const DEFAULT_CHIRP_URL = "https://commons.wikimedia.org/wiki/Special:FilePath/Budgerigar_chirping.ogg";
-    const DEFAULT_CLICK_URL = "https://commons.wikimedia.org/wiki/Special:FilePath/Australian_Ringneck_Parrot.ogg";
 
-    let autoMode = false;
-    let stream = null;
-    let audioContext = null;
-    let analyser = null;
-    let monitorTimer = null;
-    let mediaRecorder = null;
-    let mimeType = "audio/webm";
-    let chunks = [];
-    let recordingStartedAt = 0;
-    let speechStartedAt = 0;
-    let lastVoiceAt = 0;
-    let speechDetected = false;
-    let waitingForServer = false;
-    let squawkSfxEnabled = true;
-    let chirpUrl = DEFAULT_CHIRP_URL;
-    let clickUrl = DEFAULT_CLICK_URL;
-    let showState = "idle";
-    let showBusy = false;
+    const state = {
+      sessionState: "idle",
+      status: "Ready.",
+      esp32Ip: "",
+      masterVolume: 0.85,
+      sessionId: "",
+      lastTranscript: "",
+      lastResponse: "",
+      lastAudioUrl: "",
+      lastCommand: null,
+      lastEsp32Response: null,
+      stream: null,
+      audioContext: null,
+      analyser: null,
+      recorder: null,
+      monitorTimer: null,
+      mimeType: "audio/webm",
+      chunks: [],
+      recordingStartedAt: 0,
+      speechStartedAt: 0,
+      lastVoiceAt: 0,
+      speechDetected: false,
+      busy: false,
+    };
 
-    showBtn.addEventListener("click", async () => {
-      await handleShowButton();
-    });
-
-    modeBtn.addEventListener("click", async () => {
-      if (!autoMode) {
-        await startParrotMode();
-      } else {
-        stopParrotMode();
+    connectBtn.addEventListener("click", () => {
+      syncEsp32Input();
+      state.status = state.esp32Ip
+        ? `Parrot target set to ${state.esp32Ip}`
+        : "No ESP32 target set. Local controller mode is active.";
+      if (state.sessionState === "idle" || state.sessionState === "ended") {
+        state.sessionState = state.esp32Ip ? "connected" : "idle";
       }
+      render();
     });
 
-    async function startParrotMode() {
-      if (showState !== "ready") {
-        statusEl.textContent = "Play the show intro first.";
+    startBtn.addEventListener("click", async () => {
+      if (state.busy) {
         return;
       }
+
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
+        state.busy = true;
+        syncEsp32Input();
+        if (!state.sessionId) {
+          state.sessionId = makeSessionId();
+        }
+
+        state.sessionState = "starting";
+        state.status = "Requesting microphone...";
+        render();
+
+        await ensureMicrophone();
+        beginRecordingTurn();
+      } catch (error) {
+        console.error(error);
+
+        state.status = error.message || "Failed to start listening.";
+        state.sessionState = state.sessionId ? "ready" : "error";
+        state.busy = false;
+        render();
+      }
+    });
+
+    endBtn.addEventListener("click", async () => {
+      syncEsp32Input();
+      stopCurrentRecording(true);
+      releaseMicrophone();
+
+      const shouldEndRemoteSession = Boolean(state.esp32Ip && state.sessionId);
+      const closingSessionId = state.sessionId;
+
+      state.busy = false;
+      state.sessionState = shouldEndRemoteSession ? "ending" : "ended";
+      state.status = shouldEndRemoteSession ? "Ending ESP32 session..." : "Interaction ended.";
+      render();
+
+      try {
+        if (shouldEndRemoteSession) {
+          try {
+            const endData = await postJson("/session/end", {
+              esp32Ip: state.esp32Ip,
+              sessionId: closingSessionId,
+              playOutro: true,
+            });
+            state.lastCommand = endData.command || null;
+            state.lastEsp32Response = endData.esp32_response || null;
+          } catch (endError) {
+            console.error(endError);
+            state.status = `${endError.message || "Failed to end interaction."} Local state was cleared anyway.`;
+          }
+        }
+        state.sessionId = "";
+        state.sessionState = state.esp32Ip ? "connected" : "ended";
+        state.status = "Interaction ended.";
+      } catch (error) {
+        console.error(error);
+        state.status = error.message || "Failed to end interaction.";
+        state.sessionState = "error";
+      } finally {
+        render();
+      }
+    });
+
+    volumeEl.addEventListener("input", () => {
+      state.masterVolume = clampVolume(Number(volumeEl.value));
+      render();
+    });
+
+    volumeEl.addEventListener("change", async () => {
+      syncEsp32Input();
+      if (!state.esp32Ip || !state.sessionId) {
+        return;
+      }
+
+      try {
+        const data = await postJson("/set-volume", {
+          esp32Ip: state.esp32Ip,
+          sessionId: state.sessionId,
+          volume: state.masterVolume,
+        });
+        state.lastCommand = data.command || null;
+        state.lastEsp32Response = data.esp32_response || null;
+        state.status = data.esp32_response?.state
+          ? `Volume updated on the ESP32. Device state: ${data.esp32_response.state}.`
+          : "Volume updated on the ESP32.";
+        render();
+      } catch (error) {
+        console.error(error);
+        state.status = `${error.message || "Failed to update volume."} Local volume stays set in the browser.`;
+        render();
+      }
+    });
+
+    window.addEventListener("beforeunload", () => {
+      stopCurrentRecording(true);
+      releaseMicrophone();
+    });
+
+    init();
+
+    async function init() {
+      try {
+        const config = await fetchJson("/api/config");
+        state.esp32Ip = normalizeEsp32Input(config.default_esp32_ip || "");
+        state.masterVolume = clampVolume(Number(config.default_master_volume ?? 0.85));
+        esp32IpEl.value = state.esp32Ip;
+        volumeEl.value = String(state.masterVolume);
+        state.sessionState = state.esp32Ip ? "connected" : "idle";
+        state.status = "Ready.";
+      } catch (error) {
+        console.error(error);
+        state.status = "Loaded without server config.";
+      } finally {
+        render();
+      }
+    }
+
+    async function ensureMicrophone() {
+      if (state.stream) {
+        return;
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error(
+          "Microphone access is not available here. On a phone, open the page in Safari or Chrome and allow microphone access."
+        );
+      }
+
+      if (!window.isSecureContext) {
+        throw new Error(
+          "Microphone access requires a secure page. Use http://localhost on this device, or serve the site over HTTPS."
+        );
+      }
+
+      try {
+        state.stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
           },
         });
-
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048;
-        source.connect(analyser);
-
-        mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
-        autoMode = true;
-        showState = "interactive";
-        modeBtn.textContent = "Stop Interactive Parrot";
-        statusEl.textContent = "Parrot mode active. Speak when ready...";
-        await loadConfig();
-        beginListeningTurn();
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = "Microphone access failed.";
+      } catch (error) {
+        if (error?.name === "NotAllowedError" || error?.name === "SecurityError") {
+          throw new Error("Microphone permission was blocked. Allow mic access in the browser and try again.");
+        }
+        if (error?.name === "NotFoundError") {
+          throw new Error("No microphone was found on this device.");
+        }
+        if (error?.name === "NotReadableError") {
+          throw new Error("The microphone is busy or unavailable in another app.");
+        }
+        throw error;
       }
+
+      state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = state.audioContext.createMediaStreamSource(state.stream);
+      state.analyser = state.audioContext.createAnalyser();
+      state.analyser.fftSize = 2048;
+      source.connect(state.analyser);
+      state.mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
     }
 
-    function stopParrotMode() {
-      autoMode = false;
-      waitingForServer = false;
-      modeBtn.textContent = "Start Interactive Parrot";
-      statusEl.textContent = "Parrot mode stopped.";
-      if (showState === "interactive") {
-        showState = "ready";
-      }
+    function beginRecordingTurn() {
+      state.chunks = [];
+      state.speechDetected = false;
+      state.speechStartedAt = 0;
+      state.lastVoiceAt = 0;
+      state.recordingStartedAt = Date.now();
+      state.sessionState = "listening";
+      state.status = "Listening for the next user turn...";
+      render();
 
-      if (monitorTimer) {
-        clearInterval(monitorTimer);
-        monitorTimer = null;
-      }
-
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
-      }
-
-      if (stream) {
-        stream.getTracks().forEach((t) => t.stop());
-        stream = null;
-      }
-
-      if (audioContext) {
-        audioContext.close();
-        audioContext = null;
-      }
-    }
-
-    function beginListeningTurn() {
-      if (!autoMode || waitingForServer || !stream) {
-        return;
-      }
-
-      chunks = [];
-      speechDetected = false;
-      speechStartedAt = 0;
-      lastVoiceAt = 0;
-      recordingStartedAt = Date.now();
-
-      mediaRecorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorder.ondataavailable = (event) => {
+      state.recorder = new MediaRecorder(state.stream, { mimeType: state.mimeType });
+      state.recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          chunks.push(event.data);
+          state.chunks.push(event.data);
         }
       };
 
-      mediaRecorder.onstop = async () => {
-        if (!autoMode) {
+      state.recorder.onstop = async () => {
+        const wasSpeechDetected = state.speechDetected;
+        state.recorder = null;
+
+        if (!wasSpeechDetected) {
+          state.busy = false;
+          state.sessionState = state.sessionId ? "ready" : (state.esp32Ip ? "connected" : "idle");
+          state.status = "No speech detected. Tap Start Listening to try again.";
+          render();
           return;
         }
 
-        if (!speechDetected) {
-          statusEl.textContent = "No voice detected. Listening again...";
-          setTimeout(beginListeningTurn, 300);
-          return;
-        }
-
-        const blob = new Blob(chunks, { type: mimeType });
-        await sendToParrot(blob);
+        const blob = new Blob(state.chunks, { type: state.mimeType });
+        await processTurn(blob);
       };
 
-      mediaRecorder.start(200);
-      statusEl.textContent = "Listening...";
+      state.recorder.start(200);
       startVoiceMonitor();
     }
 
     function startVoiceMonitor() {
-      if (monitorTimer) {
-        clearInterval(monitorTimer);
-      }
+      clearVoiceMonitor();
+      const timeData = new Uint8Array(state.analyser.fftSize);
 
-      const timeData = new Uint8Array(analyser.fftSize);
-
-      monitorTimer = setInterval(() => {
-        if (!mediaRecorder || mediaRecorder.state !== "recording") {
+      state.monitorTimer = window.setInterval(() => {
+        if (!state.recorder || state.recorder.state !== "recording") {
           return;
         }
 
-        analyser.getByteTimeDomainData(timeData);
+        state.analyser.getByteTimeDomainData(timeData);
         let sum = 0;
         for (let i = 0; i < timeData.length; i += 1) {
           const normalized = (timeData[i] - 128) / 128;
@@ -311,292 +618,221 @@
         const now = Date.now();
 
         if (rms > VOICE_THRESHOLD) {
-          lastVoiceAt = now;
-          if (!speechDetected) {
-            speechDetected = true;
-            speechStartedAt = now;
-            statusEl.textContent = "Heard ye. Keep talkin'...";
+          state.lastVoiceAt = now;
+          if (!state.speechDetected) {
+            state.speechDetected = true;
+            state.speechStartedAt = now;
+            state.status = "Speech detected. Recording this turn...";
+            render();
           }
         }
 
-        const speechLongEnough = speechDetected && (now - speechStartedAt) >= MIN_SPEECH_MS;
-        const silenceLongEnough = speechLongEnough && lastVoiceAt && (now - lastVoiceAt) >= END_SILENCE_MS;
-        const tooLong = (now - recordingStartedAt) >= MAX_RECORD_MS;
+        const speechLongEnough = state.speechDetected && (now - state.speechStartedAt) >= MIN_SPEECH_MS;
+        const silenceLongEnough = speechLongEnough && state.lastVoiceAt && (now - state.lastVoiceAt) >= END_SILENCE_MS;
+        const tooLong = (now - state.recordingStartedAt) >= MAX_RECORD_MS;
 
         if (silenceLongEnough || tooLong) {
-          stopCurrentRecording();
+          stopCurrentRecording(false);
         }
       }, 100);
     }
 
-    function stopCurrentRecording() {
-      if (monitorTimer) {
-        clearInterval(monitorTimer);
-        monitorTimer = null;
-      }
-
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
-      }
-    }
-
-    async function sendToParrot(audioBlob) {
-      if (!autoMode) {
-        return;
-      }
-
-      waitingForServer = true;
-      statusEl.textContent = "Parrot is thinkin'...";
-
+    async function processTurn(audioBlob) {
       try {
+        state.sessionState = "processing";
+        state.status = "Transcribing, generating the reply, and building the WAV...";
+        render();
+
         const formData = new FormData();
         formData.append("audio", audioBlob, "turn.webm");
+        formData.append("volume", String(state.masterVolume));
+        if (state.sessionId) {
+          formData.append("session_id", state.sessionId);
+        }
 
-        const response = await fetch("/api/parrot", {
+        const turnResponse = await fetch("/conversation/turn", {
           method: "POST",
           body: formData,
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          const messageParts = [];
-          if (data.error) messageParts.push(data.error);
-          if (data.stage) messageParts.push(`stage=${data.stage}`);
-          if (data.details) messageParts.push(data.details);
-          throw new Error(messageParts.join(" | ") || "Unknown error");
-        }
-        if (!autoMode || showState === "outro_playing") {
-          return;
+        const turnData = await turnResponse.json();
+        if (!turnResponse.ok) {
+          throw new Error(turnData.error || turnData.details || "Conversation turn failed.");
         }
 
-        transcriptionEl.textContent = data.transcription || "(empty)";
-        parrotTextEl.textContent = data.parrotText || "(empty)";
+        state.lastTranscript = turnData.transcript || "";
+        state.lastResponse = turnData.response_text || "";
+        state.lastAudioUrl = turnData.audio_url || "";
+        state.lastCommand = turnData.play_command || state.lastCommand;
 
-        const sequence = Array.isArray(data.audioSequence) && data.audioSequence.length
-          ? data.audioSequence
-          : (Array.isArray(data.audioSegments) ? data.audioSegments.map((url) => ({ type: "tts", url })) : [{ type: "tts", url: data.audioUrl }]);
-        await playParrotReply(sequence);
-
-        if (autoMode) {
-          statusEl.textContent = "Speak again...";
-          setTimeout(beginListeningTurn, 250);
+        if (state.lastAudioUrl) {
+          audioPlayer.src = turnData.audio_path || state.lastAudioUrl;
         }
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = `Error: ${err.message}`;
-        if (autoMode) {
-          setTimeout(beginListeningTurn, 1000);
-        }
-      } finally {
-        waitingForServer = false;
-      }
-    }
 
-    async function playParrotReply(audioSequence) {
-      const sequence = audioSequence.filter((item) => item && item.url);
-      if (!sequence.length) {
-        return;
-      }
+        if (state.esp32Ip && state.sessionId && state.lastAudioUrl) {
+          state.sessionState = "playing";
+          state.status = "Sending play command to the ESP32...";
+          render();
 
-      for (const item of sequence) {
-        if (item.type === "sfx") {
-          if (squawkSfxEnabled) {
-            statusEl.textContent = `Parrot ${String(item.effect || "cue").toLowerCase()}...`;
-            await playClip(item.url, 1.0, 0.9);
+          try {
+            const playData = await postJson("/play", {
+              esp32Ip: state.esp32Ip,
+              sessionId: state.sessionId,
+              url: state.lastAudioUrl,
+              volume: state.masterVolume,
+            });
+            state.lastCommand = playData.command || state.lastCommand;
+            state.lastEsp32Response = playData.esp32_response || null;
+
+            if (playData.forward_error) {
+              state.status = `Play command built, but forwarding to the ESP32 failed: ${playData.forward_error}`;
+            } else if (playData.esp32_response) {
+              const espState = playData.esp32_response.state || "unknown";
+              const reaction = playData.esp32_response.reaction
+                ? ` ${playData.esp32_response.reaction}.`
+                : "";
+              state.status = `ESP32 accepted play_url. Device state: ${espState}.${reaction}`;
+            } else {
+              state.status = "Reply WAV sent to the ESP32.";
+            }
+          } catch (playError) {
+            console.error(playError);
+            state.status = `${playError.message || "Failed to send play command."} Local WAV preview is still available.`;
           }
-          continue;
-        }
 
-        audioPlayer.src = item.url;
-        audioPlayer.playbackRate = PARROT_PLAYBACK_RATE;
-        statusEl.textContent = "Parrot replying...";
-        await ensureAudioMetadata(audioPlayer);
-        await playAudioElement(audioPlayer);
-      }
-    }
-
-    async function playAudioElement(el) {
-      await el.play();
-      await new Promise((resolve, reject) => {
-        const onEnded = () => {
-          cleanup();
-          resolve();
-        };
-        const onError = () => {
-          cleanup();
-          reject(new Error("Audio playback failed."));
-        };
-        const cleanup = () => {
-          el.removeEventListener("ended", onEnded);
-          el.removeEventListener("error", onError);
-        };
-
-        el.addEventListener("ended", onEnded);
-        el.addEventListener("error", onError);
-      });
-    }
-
-    async function loadConfig() {
-      try {
-        const response = await fetch("/api/config");
-        if (!response.ok) {
-          return;
-        }
-        const data = await response.json();
-        if (typeof data.enableSquawkSfx === "boolean") {
-          squawkSfxEnabled = data.enableSquawkSfx;
-          sfxToggleEl.checked = data.enableSquawkSfx;
-        }
-        if (typeof data.chirpUrl === "string" && data.chirpUrl.trim()) {
-          chirpUrl = data.chirpUrl.trim();
-        }
-        if (typeof data.clickUrl === "string" && data.clickUrl.trim()) {
-          clickUrl = data.clickUrl.trim();
+          state.sessionState = "ready";
+        } else {
+          state.status = "Reply ready. No ESP32 target was set, so the WAV is available locally only.";
+          state.sessionState = state.sessionId ? "ready" : "idle";
         }
       } catch (error) {
         console.error(error);
+        state.status = error.message || "Turn processing failed.";
+        state.sessionState = "error";
+      } finally {
+        state.busy = false;
+        render();
       }
     }
 
-    sfxToggleEl.addEventListener("change", () => {
-      squawkSfxEnabled = sfxToggleEl.checked;
-    });
-
-    async function handleShowButton() {
-      if (showBusy) {
+    function stopCurrentRecording(cancelOnly) {
+      clearVoiceMonitor();
+      if (!state.recorder || state.recorder.state !== "recording") {
         return;
       }
 
-      if (showState === "idle") {
-        await playShowIntro();
-        return;
+      if (cancelOnly) {
+        state.speechDetected = false;
       }
 
-      if (showState === "ready" || showState === "interactive") {
-        await playShowOutroAndReset();
+      state.recorder.stop();
+    }
+
+    function clearVoiceMonitor() {
+      if (state.monitorTimer) {
+        window.clearInterval(state.monitorTimer);
+        state.monitorTimer = null;
       }
     }
 
-    async function playShowIntro() {
-      showBusy = true;
-      showState = "intro_playing";
-      showBtn.disabled = true;
-      modeBtn.disabled = true;
-      statusEl.textContent = "Playing show intro...";
+    function releaseMicrophone() {
+      clearVoiceMonitor();
 
-      try {
-        const data = await requestShowScript("intro");
-        parrotTextEl.textContent = data.text || "(intro script unavailable)";
-        await playScriptTrack(data.audioUrl);
-        showState = "ready";
-        showBtn.textContent = "End Show (Play Outro)";
-        modeBtn.disabled = false;
-        statusEl.textContent = "Intro finished. Start interactive parrot when ready.";
-      } catch (error) {
-        console.error(error);
-        showState = "idle";
-        showBtn.textContent = "Start Show Intro";
-        modeBtn.disabled = true;
-        statusEl.textContent = `Error: ${error.message}`;
-      } finally {
-        showBusy = false;
-        showBtn.disabled = false;
+      if (state.stream) {
+        state.stream.getTracks().forEach((track) => track.stop());
+        state.stream = null;
       }
+
+      if (state.audioContext) {
+        state.audioContext.close();
+        state.audioContext = null;
+      }
+
+      state.analyser = null;
+      state.recorder = null;
     }
 
-    async function playShowOutroAndReset() {
-      showBusy = true;
-      showState = "outro_playing";
-      showBtn.disabled = true;
-      modeBtn.disabled = true;
-      statusEl.textContent = "Playing show outro...";
-
-      try {
-        if (autoMode) {
-          stopParrotMode();
-        }
-        statusEl.textContent = "Playing show outro...";
-        const data = await requestShowScript("outro");
-        parrotTextEl.textContent = data.text || "(outro script unavailable)";
-        await playScriptTrack(data.audioUrl);
-      } catch (error) {
-        console.error(error);
-        statusEl.textContent = `Error: ${error.message}`;
-      } finally {
-        showState = "idle";
-        showBusy = false;
-        showBtn.disabled = false;
-        showBtn.textContent = "Start Show Intro";
-        modeBtn.disabled = true;
-        modeBtn.textContent = "Start Interactive Parrot";
-        statusEl.textContent = "Show reset. Press Start Show Intro to begin again.";
-      }
-    }
-
-    async function requestShowScript(type) {
-      const response = await fetch("/api/show-script", {
+    async function postJson(url, body) {
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ type }),
+        body: JSON.stringify(body),
       });
       const data = await response.json();
       if (!response.ok) {
-        const parts = [];
-        if (data.error) parts.push(data.error);
-        if (data.details) parts.push(data.details);
-        throw new Error(parts.join(" | ") || "Show script request failed.");
+        const message = [data.error, data.details].filter(Boolean).join(" | ");
+        throw new Error(message || "Request failed.");
       }
       return data;
     }
 
-    async function playScriptTrack(url) {
-      if (!url) {
-        throw new Error("Missing script audio URL.");
+    async function fetchJson(url) {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Request failed with ${response.status}.`);
       }
-      audioPlayer.src = url;
-      audioPlayer.playbackRate = 1.0;
-      await ensureAudioMetadata(audioPlayer);
-      await playAudioElement(audioPlayer);
+      return response.json();
     }
 
-    async function playClip(url, rate, volume) {
-      const a = new Audio(url);
-      a.preload = "auto";
-      a.playbackRate = rate;
-      a.volume = volume;
-      try {
-        await playAudioElement(a);
-      } catch (error) {
-        console.error(error);
-        throw error;
+    function normalizeEsp32Input(value) {
+      const raw = String(value || "").trim();
+      if (!raw) {
+        return "";
       }
+      if (/^https?:\/\//i.test(raw)) {
+        return raw.replace(/\/+$/, "");
+      }
+      return `http://${raw.replace(/\/+$/, "")}`;
     }
 
-    async function ensureAudioMetadata(el) {
-      if (Number.isFinite(el.duration) && el.duration > 0) {
-        return;
-      }
-      await new Promise((resolve) => {
-        const onReady = () => {
-          cleanup();
-          resolve();
-        };
-        const onError = () => {
-          cleanup();
-          resolve();
-        };
-        const cleanup = () => {
-          el.removeEventListener("loadedmetadata", onReady);
-          el.removeEventListener("error", onError);
-        };
-        el.addEventListener("loadedmetadata", onReady, { once: true });
-        el.addEventListener("error", onError, { once: true });
-      });
+    function syncEsp32Input() {
+      state.esp32Ip = normalizeEsp32Input(esp32IpEl.value);
+      esp32IpEl.value = state.esp32Ip;
+      return state.esp32Ip;
     }
 
+    function clampVolume(value) {
+      if (!Number.isFinite(value)) {
+        return 0.85;
+      }
+      return Math.max(0, Math.min(1, value));
+    }
+
+    function makeSessionId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return `session_${window.crypto.randomUUID()}`;
+      }
+      return `session_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+    }
+
+    function render() {
+      sessionStateEl.textContent = state.sessionState;
+      statusEl.textContent = state.status;
+      volumeValueEl.textContent = `${Math.round(state.masterVolume * 100)}%`;
+      transcriptEl.textContent = state.lastTranscript || "(none yet)";
+      responseTextEl.textContent = state.lastResponse || "(none yet)";
+      audioUrlBoxEl.innerHTML = state.lastAudioUrl
+        ? `<a href="${escapeHtml(state.lastAudioUrl)}" target="_blank" rel="noreferrer">${escapeHtml(state.lastAudioUrl)}</a>`
+        : "(none yet)";
+      lastCommandEl.textContent = state.lastCommand ? JSON.stringify(state.lastCommand, null, 2) : "(none yet)";
+      lastEsp32ResponseEl.textContent = state.lastEsp32Response
+        ? JSON.stringify(state.lastEsp32Response, null, 2)
+        : "(none yet)";
+
+      const canStart = !state.busy && (!state.recorder || state.recorder.state !== "recording");
+      startBtn.disabled = !canStart;
+      connectBtn.disabled = state.busy;
+      endBtn.disabled = !state.busy && !state.sessionId && state.sessionState !== "listening" && state.sessionState !== "ready";
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll("\"", "&quot;");
+    }
   </script>
 </body>
 </html>

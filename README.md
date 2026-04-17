@@ -1,17 +1,31 @@
-﻿# Pirate Parrot Voice Booth
+# Parrot Conversation Controller
 
-Web app flow:
-1. Tap once to start hands-free parrot mode.
-2. Browser continuously listens and auto-detects speech start/end from mic audio levels.
-3. Backend transcribes with Whisper (`whisper-large-v3`).
-4. Backend rewrites text into a pirate-parrot response.
-5. Backend synthesizes speech using Kokoro (`am_santa`) via Navigator Toolkit base URL.
-6. Browser plays reply audio, then plays an exaggerated Pixabay squawk sequence, then listens again.
+This app is now a lightweight conversation controller for the parrot project.
 
-## Requirements
+Browser jobs:
+- capture microphone audio
+- send audio to the backend for speech-to-text
+- show the user transcript
+- show the AI response text
+- send control commands to the ESP32
 
-- Node.js 18+
-- Navigator Toolkit API key
+Backend jobs:
+- speech-to-text with Whisper
+- LLM response generation
+- text-to-speech generation
+- WAV hosting from `public/generated/`
+- optional ESP32 command proxy routes
+
+## Audio Target
+
+Generated reply audio is normalized to:
+
+- WAV
+- mono
+- 16-bit PCM
+- 16000 Hz
+
+That is the output contract returned by the backend and included in the `play_url` command payload sent to the ESP32.
 
 ## Setup
 
@@ -20,7 +34,15 @@ npm install
 copy .env.example .env
 ```
 
-Edit `.env` and set `NAVIGATOR_TOOLKIT_API_KEY`.
+Set at least:
+
+- `NAVIGATOR_TOOLKIT_API_KEY`
+
+Recommended for ESP32 playback:
+
+- `PUBLIC_BASE_URL=http://YOUR-LAN-IP:3000`
+
+If `PUBLIC_BASE_URL` is left empty, the app builds audio URLs from the incoming request host. That works for some setups, but it often produces `localhost` URLs that an ESP32 cannot reach.
 
 ## Run
 
@@ -28,12 +50,172 @@ Edit `.env` and set `NAVIGATOR_TOOLKIT_API_KEY`.
 npm start
 ```
 
-Open `http://localhost:3000`.
+Open the site from your phone or browser at the same reachable host that the ESP32 will use.
+
+## Frontend State
+
+The page keeps and displays these fields:
+
+- `esp32Ip`
+- `masterVolume`
+- `sessionState`
+- `lastTranscript`
+- `lastResponse`
+- `lastAudioUrl`
+
+## Website Routes
+
+Conversation:
+
+- `POST /conversation/turn`
+- `POST /api/conversation/turn`
+
+ESP32 proxy routes:
+
+- `POST /session/start`
+- `POST /session/end`
+- `POST /set-volume`
+- `POST /play`
+- `POST /esp32/command`
+
+Config and contract:
+
+- `GET /api/config`
+- `GET /api/esp32/contract`
+
+## Conversation Response Contract
+
+`POST /conversation/turn` returns:
+
+```json
+{
+  "transcript": "Hello parrot",
+  "response_text": "Ahoy there, matey. I hear ye loud and clear.",
+  "audio_url": "http://192.168.1.20:3000/generated/reply_001.wav",
+  "audio_path": "/generated/reply_001.wav",
+  "audio_spec": {
+    "format": "wav",
+    "encoding": "pcm_s16le",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "bits_per_sample": 16
+  }
+}
+```
+
+## Exact JSON Commands For The ESP32
+
+Recommended firmware endpoint:
+
+- `POST /command`
+
+Command envelope:
+
+```json
+{
+  "version": 1,
+  "request_id": "req_play_001",
+  "timestamp": "2026-04-16T18:00:12.000Z",
+  "session_id": "session_abc123",
+  "command": "play_url",
+  "payload": {}
+}
+```
+
+Commands:
+
+### `start_session`
+
+```json
+{
+  "version": 1,
+  "request_id": "req_start_001",
+  "timestamp": "2026-04-16T18:00:00.000Z",
+  "session_id": "session_abc123",
+  "command": "start_session",
+  "payload": {
+    "volume": 0.85,
+    "play_intro": false
+  }
+}
+```
+
+### `play_intro`
+
+```json
+{
+  "version": 1,
+  "request_id": "req_intro_001",
+  "timestamp": "2026-04-16T18:00:04.000Z",
+  "session_id": "session_abc123",
+  "command": "play_intro",
+  "payload": {}
+}
+```
+
+### `set_volume`
+
+```json
+{
+  "version": 1,
+  "request_id": "req_volume_001",
+  "timestamp": "2026-04-16T18:00:08.000Z",
+  "session_id": "session_abc123",
+  "command": "set_volume",
+  "payload": {
+    "volume": 0.65
+  }
+}
+```
+
+### `play_url`
+
+```json
+{
+  "version": 1,
+  "request_id": "req_play_001",
+  "timestamp": "2026-04-16T18:00:12.000Z",
+  "session_id": "session_abc123",
+  "command": "play_url",
+  "payload": {
+    "url": "http://192.168.1.20:3000/generated/reply_001.wav",
+    "volume": 0.85,
+    "audio_spec": {
+      "format": "wav",
+      "encoding": "pcm_s16le",
+      "sample_rate_hz": 16000,
+      "channels": 1,
+      "bits_per_sample": 16
+    }
+  }
+}
+```
+
+### `end_session`
+
+```json
+{
+  "version": 1,
+  "request_id": "req_end_001",
+  "timestamp": "2026-04-16T18:00:20.000Z",
+  "session_id": "session_abc123",
+  "command": "end_session",
+  "payload": {
+    "play_outro": true
+  }
+}
+```
+
+Recommended ESP32 acknowledgement:
+
+```json
+{
+  "ok": true
+}
+```
 
 ## Notes
 
-- The app uses `base_url` from `NAVIGATOR_BASE_URL`, defaulting to `https://api.ai.it.ufl.edu/v1`.
-- Generated MP3 files are written to `public/generated/`.
-- Default rewrite model is `llama-3.1-8b-instruct` (cheap/simple choice).
-- If desired, change models/voice in `.env` (`CHAT_MODEL`, `WHISPER_MODEL`, `KOKORO_MODEL`, `KOKORO_VOICE`, `KOKORO_SPEED`, `SQUAWK_URL`).
-- Squawk audio is loaded from `SQUAWK_URL` (default: local `public/assets/parrot-squawk.ogg`).
+- The website no longer stores show intro or outro audio. Those are expected to remain on the ESP32 if you want local intro/outro playback.
+- The browser can still preview the generated reply audio, but the primary output path is the ESP32 `play_url` command.
+- The server exposes the same command examples programmatically at `GET /api/esp32/contract`.
